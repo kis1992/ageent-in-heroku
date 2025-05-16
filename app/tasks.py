@@ -9,6 +9,14 @@ import os
 import ssl
 import re
 from redis import ConnectionPool
+import logging
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=os.environ.get('OPENAI_KEY'))
 assistant = client.beta.assistants.retrieve(os.environ.get('ASSISTANT_KEY'))
@@ -84,10 +92,12 @@ def process_user_messages(user_id, data):
         
         # Отправляем ответ через webhook, если есть текст
         if data['text'] and not data['text'].isspace():
+            logger.info(f"*1*Joined webhook text: {data['text']} ***")
             webhook(data)
             
         print(f"Отправлен ответ пользователю {user_id}: текст длиной {len(combined_messages)} символов")
     except Exception as e:
+        logger.error(f"---Ошибка при обработке сообщений пользователя {user_id}: {e}---")
         print(f"Ошибка при обработке сообщений пользователя {user_id}: {e}")
 
 def gpt_input(data_from_bitrix):
@@ -96,6 +106,7 @@ def gpt_input(data_from_bitrix):
     print(f'User_message: {user_message}')
     user_id = data_from_bitrix["user_id"]
     conversation_history = get_conversation_history(user_id)
+    logger.info(f"3**User_message: {user_message} --- and ---tthread {conversation_history} ***")
 
     if conversation_history is None:
         thread = client.beta.threads.create(
@@ -131,6 +142,7 @@ def gpt_input(data_from_bitrix):
         
     assistant_reply = extract_role_content(messages)
     print(f'gpt response: {assistant_reply}')
+    logger.info(f"4**gpt response: {assistant_reply}***")
  
     return assistant_reply
 
