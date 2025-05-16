@@ -1,0 +1,10 @@
+Flask==3.0.3
+Flask-Cors==5.0.0
+gunicorn==23.0.0
+openai==1.57.0
+requests==2.32.3
+celery==5.3.4
+redis==5.0.0
+packaging==24.1
+pydantic==2.9.2
+pydantic_core==2.23.4
