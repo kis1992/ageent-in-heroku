@@ -225,8 +225,10 @@ def save_conversation_history(user_id, history):
             cursor.execute('''
                 INSERT OR REPLACE INTO conversation_history (user_id, history) VALUES (?, ?)
             ''', (f"{user_id}", history))
+        logger.info(f"Thread id -> {history} for user -> {user_id} succseful saved")
     except Exception as e:
         print(f"Ошибка при сохранении истории разговора: {e}")
+        logger.error(f"Ошибка при сохранении истории разговора: {e}")
 
 def save_user_info(user_account, channel_id):
     """Сохраняет информацию о пользователе"""
