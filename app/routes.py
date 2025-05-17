@@ -34,7 +34,10 @@ bp = Blueprint('routes', __name__)
 def hello_history():
     """Маршрут для просмотра истории сообщений"""
     user_id = request.args.get('userid')
+    logger.info(f"-**Get history {user_id}***")
+
     if not user_id:
+        
         return "Не указан ID пользователя", 400
         
     data = get_conversation_history(user_id, True)
