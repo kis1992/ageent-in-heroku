@@ -190,28 +190,28 @@ class SQLiteConnection:
             self.conn.commit()
         self.conn.close()
 
-def get_conversation_history(user_id, history=False):
-    """Получает историю разговора пользователя"""
+def get_conversation_history(user_id,history=False):
+    conn = sqlite3.connect('conversations.db')
+    cursor = conn.cursor()
     try:
-        with SQLiteConnection() as cursor:
-            cursor.execute('SELECT history FROM conversation_history WHERE user_id = ?', (user_id,))
-            row = cursor.fetchone()
-            
-        if not row:
-            return None
-            
-        thread_id = row[0]
-        print(f'this is {user_id} thread id {thread_id}')
-        
-        if history:
-            messages = client.beta.threads.messages.list(thread_id=thread_id)
-            assistant_reply = extract_role_content(messages, True)
-            return assistant_reply
-        else:
-            return thread_id
+        cursor.execute('SELECT history FROM conversation_history WHERE user_id = ?', (user_id,))
+        row = cursor.fetchone()
     except Exception as e:
-        print(f"Ошибка при получении истории разговора: {e}")
-        return None
+        print(f"when we find history have error ** {e}")
+        row=None
+    conn.close()
+    if row:
+        print(f'this is {user_id} thread id {row[0]}')
+        if history:
+            messages = client.beta.threads.messages.list(
+                thread_id=row[0],
+            )
+            #messages = messages.model_dump()
+            assistent_reply = extract_role_content(messages,True)
+            return assistent_reply
+        else:
+            return row[0]
+    return None
 
 def save_conversation_history(user_id, history):
     """Сохраняет историю разговора пользователя"""
