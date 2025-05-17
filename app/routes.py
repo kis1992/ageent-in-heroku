@@ -39,8 +39,13 @@ def hello_history():
     if not user_id:
         
         return "Не указан ID пользователя", 400
-        
-    data = get_conversation_history(user_id, True)
+    try:
+        data = get_conversation_history(user_id, True)
+        logger.info(f"-**Get history data {data}***")
+    except Exception as e:
+        logger.error(f"-**Error when i get data - {e}***")
+        data=[]
+
     return render_template('history3.html', data=data)
 
 @bp.route('/webhook', methods=['POST'])
