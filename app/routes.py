@@ -5,7 +5,8 @@ from app.tasks import (
     check_status_conversation, 
     message_to_manager, 
     redis_client,
-    clean_url
+    clean_url,
+    SQLiteConnection
 )
 import os
 import re
@@ -158,6 +159,59 @@ def index():
 # Можно добавить маршрут для проверки состояния Redis
 @bp.route('/health')
 def health_check():
+    """Проверка состояния Redis и получение данных из SQLite"""
+    result = {
+        "status": "ok",
+        "redis": {},
+        "sqlite": {
+            "users": []
+        }
+    }
+
+    # Проверка Redis
+    try:
+        info = redis_client.info()
+        connected_clients = info.get('connected_clients', 0)
+        total_connections_received = info.get('total_connections_received', 0)
+        
+        result["redis"] = {
+            "connected": True,
+            "connected_clients": connected_clients,
+            "total_connections_received": total_connections_received
+        }
+    except Exception as e:
+        result["redis"] = {
+            "connected": False,
+            "error": str(e)
+        }
+    
+    # Получение данных из SQLite
+    try:
+        with SQLiteConnection() as cursor:
+            cursor.execute('SELECT user_id, history FROM conversation_history')
+            rows = cursor.fetchall()
+            
+            for row in rows:
+                user_id, thread_id = row
+                result["sqlite"]["users"].append({
+                    "user_id": user_id,
+                    "thread_id": thread_id
+                })
+            
+            result["sqlite"]["status"] = "ok"
+            result["sqlite"]["total_users"] = len(rows)
+    except Exception as e:
+        result["sqlite"] = {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    # Определяем общий статус на основе обеих проверок
+    if result["redis"].get("connected", False) == False or result["sqlite"].get("status") == "error":
+        result["status"] = "error"
+        return jsonify(result), 500
+    
+    return jsonify(result)
     """Проверка состояния Redis"""
     try:
         # Проверяем подключение к Redis
