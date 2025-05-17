@@ -190,29 +190,32 @@ class SQLiteConnection:
             self.conn.commit()
         self.conn.close()
 
-def get_conversation_history(user_id,history=False):
-    conn = sqlite3.connect('conversations.db')
-    cursor = conn.cursor()
+def get_conversation_history(user_id, history=False):
+    """Получает историю разговора пользователя"""
     try:
-        cursor.execute('SELECT history FROM conversation_history WHERE user_id = ?', (user_id,))
-        row = cursor.fetchone()
-    except Exception as e:
-        print(f"when we find history have error ** {e}")
-        row=None
-    conn.close()
-    if row:
-        print(f'this is {user_id} thread id {row[0]}')
+        with SQLiteConnection() as cursor:
+            cursor.execute('SELECT history FROM conversation_history WHERE user_id = ?', (user_id,))
+            row = cursor.fetchone()
+            
+        if not row:
+            return None
+            
+        thread_id = row[0]
+        print(f'this is {user_id} thread id {thread_id}')
+        logger.info(f'this is user -> {user_id} thread id -> {thread_id}')
+        
         if history:
-            messages = client.beta.threads.messages.list(
-                thread_id=row[0],
-            )
-            #messages = messages.model_dump()
-            assistent_reply = extract_role_content(messages,True)
-            return assistent_reply
+            messages = client.beta.threads.messages.list(thread_id=thread_id)
+            assistant_reply = extract_role_content(messages, True)
+            logger.info(f"Its history conversation thread -> {thread_id} *** data -> {assistant_reply}")
+            return assistant_reply
         else:
-            return row[0]
-    return None
-
+            return thread_id
+    except Exception as e:
+        print(f"Ошибка при получении истории разговора: {e}")
+        logger.error(f"Ошибка при получении истории разговора: {e}")
+        return None
+    
 def save_conversation_history(user_id, history):
     """Сохраняет историю разговора пользователя"""
     try:
