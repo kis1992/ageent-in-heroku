@@ -198,6 +198,8 @@ def get_conversation_history(user_id, history=False):
             row = cursor.fetchone()
             
         if not row:
+            print(f"!!! Ошибка при получении thread")
+            logger.error(f"!!! Ошибка при получении thread")
             return None
             
         thread_id = row[0]
