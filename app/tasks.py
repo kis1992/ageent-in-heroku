@@ -176,7 +176,7 @@ class SQLiteConnection:
     def __init__(self, db_name=None, max_retries=5, retry_delay=0.1):
         if db_name is None:
             # Используем абсолютный путь в /tmp, который доступен на Heroku
-            self.db_name = '/tmp/conversations.db'
+            self.db_name = '/tmp/conversation.db'
         else:
             self.db_name = db_name
         self.conn = None
@@ -229,7 +229,7 @@ class SQLiteConnection:
             self.conn.close()
 
 def get_conversation_history(user_id,history=False):
-    conn = sqlite3.connect('conversations.db')
+    conn = sqlite3.connect('conversation.db')
     cursor = conn.cursor()
     try:
         cursor.execute('SELECT history FROM conversation_history WHERE user_id = ?', (user_id,))
@@ -252,7 +252,7 @@ def get_conversation_history(user_id,history=False):
     return None
 
 def save_conversation_history(user_id, history):
-    conn = sqlite3.connect('conversations.db')
+    conn = sqlite3.connect('conversation.db')
     cursor = conn.cursor()
     cursor.execute('''
         INSERT OR REPLACE INTO conversation_history (user_id, history) VALUES (?, ?)
