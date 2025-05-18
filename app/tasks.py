@@ -173,69 +173,117 @@ def webhook(first_message, gpt_answer='code_gpt_base'):
 
 # Контекстный менеджер для безопасной работы с SQLite
 class SQLiteConnection:
-    def __init__(self, db_name=None):
+    def __init__(self, db_name=None, max_retries=5, retry_delay=0.1):
         if db_name is None:
-            # Получаем путь к корню проекта
-            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            self.db_name = os.path.join(root_dir, 'conversations.db')
+            # Используем абсолютный путь в /tmp, который доступен на Heroku
+            self.db_name = '/tmp/conversations.db'
         else:
             self.db_name = db_name
         self.conn = None
         self.cursor = None
-
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        
+        # Убедимся, что таблица существует
+        self._ensure_table_exists()
+        
+    def _ensure_table_exists(self):
+        # Создаем таблицу, если она не существует
+        conn = sqlite3.connect(self.db_name)
+        try:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS conversation_history (
+                    user_id TEXT PRIMARY KEY,
+                    history TEXT
+                )
+            ''')
+            conn.commit()
+        finally:
+            conn.close()
+            
     def __enter__(self):
-        self.conn = sqlite3.connect(self.db_name)
-        self.cursor = self.conn.cursor()
-        return self.cursor
-
+        retries = 0
+        last_error = None
+        
+        while retries < self.max_retries:
+            try:
+                self.conn = sqlite3.connect(self.db_name, timeout=20)
+                self.conn.row_factory = sqlite3.Row  # Для удобного доступа к колонкам по имени
+                self.cursor = self.conn.cursor()
+                return self.cursor
+            except sqlite3.OperationalError as e:
+                # Обработка ошибки "database is locked"
+                last_error = e
+                retries += 1
+                time.sleep(self.retry_delay)
+                
+        # Если все попытки неудачны, выбрасываем последнюю ошибку
+        raise last_error if last_error else sqlite3.OperationalError("Could not connect to database")
+        
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is not None:
-            self.conn.rollback()
-        else:
-            self.conn.commit()
-        self.conn.close()
+        if self.conn:
+            if exc_type is not None:
+                self.conn.rollback()
+            else:
+                self.conn.commit()
+            self.conn.close()
 
 def get_conversation_history(user_id, history=False):
     """Получает историю разговора пользователя"""
-    row=None
     try:
-        with SQLiteConnection() as cursor:
-            cursor.execute('SELECT history FROM conversation_history WHERE user_id = ?', (user_id,))
-            row = cursor.fetchone()
-            
-        if not row:
-            print(f"!!! Ошибка при получении thread")
-            logger.error(f"!!! Ошибка при получении thread")
-            return None
-            
-        thread_id = row[0]
-        print(f'this is {user_id} thread id {thread_id}')
-        logger.info(f'this is user -> {user_id} thread id -> {thread_id}')
-        
-        if history:
-            messages = client.beta.threads.messages.list(thread_id=thread_id)
-            assistant_reply = extract_role_content(messages, True)
-            logger.info(f"Its history conversation thread -> {thread_id} *** data -> {assistant_reply}")
-            return assistant_reply
-        else:
-            return thread_id
+        # Добавляем больше попыток для обработки возможных блокировок
+        for attempt in range(3):
+            try:
+                with SQLiteConnection() as cursor:
+                    cursor.execute('SELECT history FROM conversation_history WHERE user_id = ?', (user_id,))
+                    row = cursor.fetchone()
+                    
+                if not row:
+                    logger.warning(f"Thread не найден для пользователя {user_id}")
+                    return None
+                    
+                thread_id = row[0]
+                logger.info(f'Получен thread_id {thread_id} для пользователя {user_id}')
+                
+                if history:
+                    messages = client.beta.threads.messages.list(thread_id=thread_id)
+                    assistant_reply = extract_role_content(messages, True)
+                    logger.info(f"История диалога для thread {thread_id}: {assistant_reply}")
+                    return assistant_reply
+                else:
+                    return thread_id
+                    
+            except sqlite3.OperationalError as e:
+                if 'database is locked' in str(e) and attempt < 2:
+                    time.sleep(0.5 * (attempt + 1))  # Увеличиваем задержку с каждой попыткой
+                    continue
+                raise
+                
     except Exception as e:
-        print(f"Ошибка при получении истории разговора: {e}")
-        logger.error(f"Ошибка при получении истории разговора: {e}")
+        logger.error(f"Ошибка при получении истории разговора: {e}", exc_info=True)
         return None
-    
+        
 def save_conversation_history(user_id, history):
     """Сохраняет историю разговора пользователя"""
     try:
-        with SQLiteConnection() as cursor:
-            cursor.execute('''
-                INSERT OR REPLACE INTO conversation_history (user_id, history) VALUES (?, ?)
-            ''', (f"{user_id}", history))
-        logger.info(f"Thread id -> {history} for user -> {user_id} succseful saved")
+        # Добавляем больше попыток для обработки возможных блокировок
+        for attempt in range(3):
+            try:
+                with SQLiteConnection() as cursor:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO conversation_history (user_id, history) VALUES (?, ?)
+                    ''', (str(user_id), history))
+                logger.info(f"Thread {history} для пользователя {user_id} успешно сохранен")
+                break
+                
+            except sqlite3.OperationalError as e:
+                if 'database is locked' in str(e) and attempt < 2:
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                raise
+                
     except Exception as e:
-        print(f"Ошибка при сохранении истории разговора: {e}")
-        logger.error(f"Ошибка при сохранении истории разговора: {e}")
-
+        logger.error(f"Ошибка при сохранении истории разговора: {e}", exc_info=True)
 def save_user_info(user_account, channel_id):
     """Сохраняет информацию о пользователе"""
     try:
