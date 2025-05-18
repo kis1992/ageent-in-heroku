@@ -9,15 +9,113 @@ import os
 import ssl
 import re
 from redis import ConnectionPool
+import json
 import logging
+import threading
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
+# Файловый замок для предотвращения конкурентных записей
+file_lock = threading.Lock()
+
+class JSONStorage:
+    def __init__(self, file_path=None):
+        if file_path is None:
+            # Используем директорию /tmp, доступную на Heroku
+            self.file_path = '/tmp/conversations.json'
+        else:
+            self.file_path = file_path
+        
+        # Создаем файл, если он не существует
+        self._ensure_file_exists()
+    
+    def _ensure_file_exists(self):
+        """Создаем файл с пустым JSON-объектом, если он не существует"""
+        if not os.path.exists(self.file_path):
+            with open(self.file_path, 'w') as f:
+                json.dump({}, f)
+    
+    def load_data(self):
+        """Загружает все данные из JSON-файла"""
+        max_retries = 3
+        retry_delay = 0.2
+        
+        for attempt in range(max_retries):
+            try:
+                with file_lock:
+                    with open(self.file_path, 'r') as f:
+                        return json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError) as e:
+                logger.warning(f"Ошибка при чтении JSON ({attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    # Если файл поврежден или не существует, создаем заново
+                    self._ensure_file_exists()
+                else:
+                    logger.error("Не удалось загрузить данные после нескольких попыток")
+                    return {}
+    
+    def save_data(self, data):
+        """Сохраняет все данные в JSON-файл"""
+        max_retries = 3
+        retry_delay = 0.2
+        
+        for attempt in range(max_retries):
+            try:
+                with file_lock:
+                    with open(self.file_path, 'w') as f:
+                        json.dump(data, f)
+                return True
+            except Exception as e:
+                logger.warning(f"Ошибка при записи JSON ({attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                else:
+                    logger.error("Не удалось сохранить данные после нескольких попыток")
+                    return False
+
+# Теперь реализуем те же функции, что и раньше
+def get_conversation_history(user_id, history=False):
+    """Получает историю разговора пользователя"""
+    try:
+        storage = JSONStorage()
+        data = storage.load_data()
+        
+        if user_id not in data:
+            logger.warning(f"Thread не найден для пользователя {user_id}")
+            return None
+        
+        thread_id = data[user_id]
+        logger.info(f'Получен thread_id {thread_id} для пользователя {user_id}')
+        
+        if history:
+            messages = client.beta.threads.messages.list(thread_id=thread_id)
+            assistant_reply = extract_role_content(messages, True)
+            logger.info(f"История диалога для thread {thread_id}: {assistant_reply}")
+            return assistant_reply
+        else:
+            return thread_id
+            
+    except Exception as e:
+        logger.error(f"Ошибка при получении истории разговора: {e}", exc_info=True)
+        return None
+
+def save_conversation_history(user_id, history):
+    """Сохраняет историю разговора пользователя"""
+    try:
+        storage = JSONStorage()
+        data = storage.load_data()
+        
+        # Обновляем или добавляем запись
+        data[str(user_id)] = history
+        
+        if storage.save_data(data):
+            logger.info(f"Thread {history} для пользователя {user_id} успешно сохранен")
+        else:
+            logger.error(f"Не удалось сохранить thread {history} для пользователя {user_id}")
+            
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении истории разговора: {e}", exc_info=True)
 client = OpenAI(api_key=os.environ.get('OPENAI_KEY'))
 assistant = client.beta.assistants.retrieve(os.environ.get('ASSISTANT_KEY'))
 
@@ -228,7 +326,7 @@ class SQLiteConnection:
                 self.conn.commit()
             self.conn.close()
 
-def get_conversation_history(user_id,history=False):
+"""def get_conversation_history(user_id,history=False):
     conn = sqlite3.connect('conversation.db')
     cursor = conn.cursor()
     try:
@@ -259,7 +357,7 @@ def save_conversation_history(user_id, history):
     ''', (f"{user_id}", history))
     conn.commit()
     conn.close()
-
+"""
 def save_user_info(user_account, channel_id):
     """Сохраняет информацию о пользователе"""
     try:
