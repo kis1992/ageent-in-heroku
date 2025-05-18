@@ -43,6 +43,7 @@ def hello_history():
         return "Не указан ID пользователя", 400
     try:
         thread_id = get_conversation_history(user_id)
+        logger.info(f"-**Get {user_id} (->) {thread_id}***")
         messages = client.beta.threads.messages.list(thread_id=thread_id)
         data = extract_role_content(messages,True)
         logger.info(f"-**Get history Thread in history -> {thread_id}***")
