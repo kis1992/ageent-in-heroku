@@ -192,6 +192,7 @@ class SQLiteConnection:
 
 def get_conversation_history(user_id, history=False):
     """Получает историю разговора пользователя"""
+    row=None
     try:
         with SQLiteConnection() as cursor:
             cursor.execute('SELECT history FROM conversation_history WHERE user_id = ?', (user_id,))
