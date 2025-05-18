@@ -9,12 +9,12 @@ import os
 import ssl
 import re
 from redis import ConnectionPool
-import json
 import logging
+import json
 import threading
 
 logger = logging.getLogger(__name__)
-
+url_database = "https://ailiner.kz/history"
 # Файловый замок для предотвращения конкурентных записей
 file_lock = threading.Lock()
 
@@ -78,15 +78,9 @@ class JSONStorage:
 def get_conversation_history(user_id, history=False):
     """Получает историю разговора пользователя"""
     try:
-        storage = JSONStorage()
-        data = storage.load_data()
-        
-        if user_id not in data:
-            logger.warning(f"Thread не найден для пользователя {user_id}")
-            return None
-        
-        thread_id = data[user_id]
-        logger.info(f'Получен thread_id {thread_id} для пользователя {user_id}')
+        response = requests.post(url_database,json={"user_id":f"{user_id}"})
+        data = response.json()
+        thread_id = data.get("thread_id")
         
         if history:
             messages = client.beta.threads.messages.list(thread_id=thread_id)
@@ -103,19 +97,12 @@ def get_conversation_history(user_id, history=False):
 def save_conversation_history(user_id, history):
     """Сохраняет историю разговора пользователя"""
     try:
-        storage = JSONStorage()
-        data = storage.load_data()
-        
-        # Обновляем или добавляем запись
-        data[str(user_id)] = history
-        
-        if storage.save_data(data):
-            logger.info(f"Thread {history} для пользователя {user_id} успешно сохранен")
-        else:
-            logger.error(f"Не удалось сохранить thread {history} для пользователя {user_id}")
-            
+        response = requests.post(url_database,json={"user_id":f"{user_id}","thread_id":f"{history}"})
+        data = response.json()
+        logger.info("conversation succesful written")
     except Exception as e:
         logger.error(f"Ошибка при сохранении истории разговора: {e}", exc_info=True)
+
 client = OpenAI(api_key=os.environ.get('OPENAI_KEY'))
 assistant = client.beta.assistants.retrieve(os.environ.get('ASSISTANT_KEY'))
 
@@ -326,38 +313,6 @@ class SQLiteConnection:
                 self.conn.commit()
             self.conn.close()
 
-"""def get_conversation_history(user_id,history=False):
-    conn = sqlite3.connect('conversation.db')
-    cursor = conn.cursor()
-    try:
-        cursor.execute('SELECT history FROM conversation_history WHERE user_id = ?', (user_id,))
-        row = cursor.fetchone()
-    except Exception as e:
-        print(f"when we find history have error ** {e}")
-        row=None
-    conn.close()
-    if row:
-        print(f'this is {user_id} thread id {row[0]}')
-        if history:
-            messages = client.beta.threads.messages.list(
-                thread_id=row[0],
-            )
-            #messages = messages.model_dump()
-            assistent_reply = extract_role_content(messages,True)
-            return assistent_reply
-        else:
-            return row[0]
-    return None
-
-def save_conversation_history(user_id, history):
-    conn = sqlite3.connect('conversation.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT OR REPLACE INTO conversation_history (user_id, history) VALUES (?, ?)
-    ''', (f"{user_id}", history))
-    conn.commit()
-    conn.close()
-"""
 def save_user_info(user_account, channel_id):
     """Сохраняет информацию о пользователе"""
     try:
