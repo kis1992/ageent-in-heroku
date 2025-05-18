@@ -173,8 +173,13 @@ def webhook(first_message, gpt_answer='code_gpt_base'):
 
 # Контекстный менеджер для безопасной работы с SQLite
 class SQLiteConnection:
-    def __init__(self, db_name='conversations.db'):
-        self.db_name = db_name
+    def __init__(self, db_name=None):
+        if db_name is None:
+            # Получаем путь к корню проекта
+            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            self.db_name = os.path.join(root_dir, 'conversations.db')
+        else:
+            self.db_name = db_name
         self.conn = None
         self.cursor = None
 

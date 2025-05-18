@@ -40,7 +40,6 @@ def hello_history():
     logger.info(f"-**Get history {user_id}***")
 
     if not user_id:
-        
         return "Не указан ID пользователя", 400
     try:
         thread_id = get_conversation_history(user_id)
