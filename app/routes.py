@@ -6,7 +6,9 @@ from app.tasks import (
     message_to_manager, 
     redis_client,
     clean_url,
-    SQLiteConnection
+    SQLiteConnection,
+    extract_role_content,
+    client
 )
 import os
 import re
@@ -41,8 +43,10 @@ def hello_history():
         
         return "Не указан ID пользователя", 400
     try:
-        data = get_conversation_history(user_id, True)
-        logger.info(f"-**Get history data {data}***")
+        thread_id = get_conversation_history(user_id)
+        messages = client.beta.threads.messages.list(thread_id=thread_id)
+        data = extract_role_content(messages,True)
+        logger.info(f"-**Get history Thread in history -> {thread_id}***")
     except Exception as e:
         logger.error(f"-**Error when i get data - {e}***")
         data=[]
