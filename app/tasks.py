@@ -81,6 +81,9 @@ def get_conversation_history(user_id, history=False):
         response = requests.post(url_database,json={"user_id":f"{user_id}"})
         data = response.json()
         thread_id = data.get("thread_id")
+        logger.info(f"???Response  thread object -> {thread_id}")
+        if thread_id is None:
+            return None
         
         if history:
             messages = client.beta.threads.messages.list(thread_id=thread_id)
