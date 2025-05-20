@@ -80,7 +80,7 @@ def get_conversation_history(user_id, history=False):
     try:
         response = requests.post(url_database,json={"user_id":f"{user_id}"})
         data = response.json()
-        thread_id = data.get("thread_id")
+        thread_id = data.get("thread_id",None)
         logger.info(f"???Response  thread object -> {thread_id}")
         if thread_id is None:
             return None
