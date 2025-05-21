@@ -157,7 +157,7 @@ def redis_operation(operation_func, retry_count=3, retry_delay=1):
 @shared_task
 def process_user_messages(user_id, data):
     """Обрабатывает сообщения пользователя из Redis и отправляет ответ"""
-    time.sleep(9)
+    time.sleep(5)
     prefix = f"user_{clean_url(os.environ.get('bot_url'))}_{user_id}"
     
     def _get_and_clear_messages():
