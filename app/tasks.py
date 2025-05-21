@@ -82,7 +82,8 @@ def get_conversation_history(user_id, history=False):
         data = response.json()
         thread_id = data.get("thread_id",None)
         logger.info(f"???Response  thread object -> {thread_id}")
-        if thread_id is None:
+        if thread_id is None or thread_id == "None" or thread_id == "":
+            logger.info("Thread ID не найден, создаем новый")
             return None
         
         if history:
