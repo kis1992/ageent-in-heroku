@@ -78,7 +78,7 @@ class JSONStorage:
 def get_conversation_history(user_id, history=False):
     """Получает историю разговора пользователя"""
     try:
-        response = requests.post(url_database,json={"user_id":f"{user_id}"})
+        response = requests.post(url_database,json={"user_id":f"{user_id}_{os.environ.get('bot_url')}"})
         data = response.json()
         thread_id = data.get("thread_id",None)
         logger.info(f"???Response  thread object -> {thread_id}")
@@ -101,7 +101,7 @@ def get_conversation_history(user_id, history=False):
 def save_conversation_history(user_id, history):
     """Сохраняет историю разговора пользователя"""
     try:
-        response = requests.post(url_database,json={"user_id":f"{user_id}","thread_id":f"{history}"})
+        response = requests.post(url_database,json={"user_id":f"{user_id}_{os.environ.get('bot_url')}","thread_id":f"{history}"})
         data = response.json()
         logger.info("conversation succesful written")
     except Exception as e:
